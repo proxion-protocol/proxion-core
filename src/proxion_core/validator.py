@@ -26,7 +26,9 @@ def _deny(reason: str) -> Decision:
 def _default_pop_check(token: Token, proof: object) -> bool:
     if not isinstance(proof, dict):
         return False
-    return proof.get("holder_key_fingerprint") == token.holder_key_fingerprint
+    # Support both for compatibility
+    proof_key = proof.get("holder_key_fingerprint") or proof.get("pubkey")
+    return proof_key == token.holder_key_fingerprint
 
 
 def validate_request(
@@ -55,7 +57,23 @@ def validate_request(
         else:
             if not _default_pop_check(token, proof):
                 return _deny("invalid_proof")
-        if (ctx.action, ctx.resource) not in token.permissions:
+        # Permission Check (with Prefix Support)
+        allowed_by_permission = False
+        for p_action, p_resource in token.permissions:
+            if p_action == ctx.action:
+                if p_resource == ctx.resource:
+                    allowed_by_permission = True
+                    break
+                # Hierarchical check: if permission is for /data/ and resource is /data/photos
+                if p_resource.endswith("/") and ctx.resource.startswith(p_resource):
+                    allowed_by_permission = True
+                    break
+                # Root wildcard
+                if p_resource == "/":
+                    allowed_by_permission = True
+                    break
+
+        if not allowed_by_permission:
             return _deny("permission_missing")
         for caveat in token.caveats:
             try:
