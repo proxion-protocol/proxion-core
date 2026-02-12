@@ -91,6 +91,18 @@ class InviteAcceptance:
              sig_bytes = identity_key.sign(canonical.encode())
              self.signature = sig_bytes.hex() if isinstance(sig_bytes, bytes) else str(sig_bytes)
 
+    def verify(self, verifier_func) -> bool:
+        """Verify the responder's signature on the acceptance data."""
+        if not self.signature: return False
+        data = self.to_dict()
+        del data['signature']
+        canonical = json.dumps(data, sort_keys=True)
+        return verifier_func(self.responder['public_key'], bytes.fromhex(self.signature), canonical.encode())
+
+    def verify_challenge(self, verifier_func, challenge_marker: str) -> bool:
+        """Verify the signature on the challenge_marker."""
+        return verifier_func(self.responder['public_key'], bytes.fromhex(self.challenge_response), challenge_marker.encode())
+
 @dataclass
 class RelationshipCertificate:
     """The mutual capability token."""
@@ -125,3 +137,11 @@ class RelationshipCertificate:
         if hasattr(identity_key, 'sign'):
              sig_bytes = identity_key.sign(canonical.encode())
              self.signature = sig_bytes.hex() if isinstance(sig_bytes, bytes) else str(sig_bytes)
+
+    def verify(self, verifier_func) -> bool:
+        """Verify the issuer's signature on the certificate."""
+        if not self.signature: return False
+        data = self.to_dict()
+        del data['signature']
+        canonical = json.dumps(data, sort_keys=True)
+        return verifier_func(self.issuer, bytes.fromhex(self.signature), canonical.encode())
